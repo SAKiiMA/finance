@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Change Password
+{% endblock %}
+
+{% block main %}
+    <div class="container">
+        <form action="/chpass" method="post">
+            <div class="form-group">
+                <input autocomplete="off" autofocus class="form-control" name="username" id="username" placeholder="Username" type="text" required>
+            </div>
+            <div class="form-group">
+                <input class="form-control" name="oldpass" id="oldpass" placeholder="Current Password" type="password" required>
+            </div>
+            <div class="form-group">
+                <input class="form-control" name="newpass" id="newpass" placeholder="New Password" type="password" required>
+            </div>
+            <div class="form-group">
+                <input class="form-control" name="confirmpass" id="confirmpass" placeholder="New Password (again)" type="password" required>
+            </div>
+            <button class="btn btn-primary" type="submit">Change Password</button>
+
+            <div id="passvalid">
+                <h5>Password Verification</h5>
+                <h6><b>Password must contain:</b></h6>
+                <p id="length" class="invalid">At least 8 characters</p>
+                <p id="letter" class="invalid">At least one letter</p>
+                <p id="number" class="invalid">At least one number</p>
+                <p id="symbol" class="invalid">AND/OR a symbol</p>
+            </div>
+
+            <div id="passmatch">
+                <h5>Password Confirmation</h5>
+                <p id="match" class="invalid">Passwords match!</p>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Ensure new password is strong and match its confirmation
+        $(document).ready(function(){
+            $("form").on("submit", function(event){
+                event.preventDefault();
+                if ( $("#newpass").val().length < 8 || $("#newpass").val().match(/[A-z]/) == null || $("#newpass").val().match(/[0-9]/) == null ) {
+                    alert("Follow the pattern for STRONG password!");
+                } else if ( $("#newpass").val() != $("#confirmpass").val() ) {
+                    alert("Passwords do not MATCH!");
+                } else {
+                    $("form").off("submit").submit();
+                }
+            });
+        });
+
+        // Handling password strength validation FEEDBACK
+        $(document).ready(function(){
+            $("#newpass").keyup(function(){
+                // grab password whenever user type a new character
+                var pswd = $(this).val();
+
+                // validate password length
+                if (pswd.length < 8) {
+                    $("#length").removeClass("valid").addClass("invalid");
+                } else {
+                    $("#length").removeClass("invalid").addClass("valid");
+                }
+
+                // validate letter in password
+                if (pswd.match(/[A-z]/)) {
+                    $("#letter").removeClass("invalid").addClass("valid");
+                } else {
+                    $("#letter").removeClass("valid").addClass("invalid");
+                }
+
+                // validate number in password
+                if (pswd.match(/[0-9]/)) {
+                    $("#number").removeClass("invalid").addClass("valid");
+                } else {
+                    $("#number").removeClass("valid").addClass("invalid");
+                }
+
+                // validate symbol in password
+                if (pswd.match(/[-#@!$%^&*()_+|~=`{}\[\]:";'<>?,.\/]/)) {
+                    $("#symbol").removeClass("invalid").addClass("valid");
+                } else {
+                    $("#symbol").removeClass("valid").addClass("invalid");
+                }
+
+            // display/hide validation box on click/unclick on password field
+            }).focus(function(){
+                $("#passvalid").show();
+            }).blur(function(){
+                $("#passvalid").hide();
+            });
+        });
+
+        // handling password confirmation FEEDBACK
+        $(document).ready(function(){
+            $("#confirmpass").keyup(function(){
+                if ($("#newpass").val() == $("#confirmpass").val()) {
+                    $("#match").removeClass("invalid").addClass("valid");
+                } else {
+                    $("#match").removeClass("valid").addClass("invalid");
+                }
+            }).focus(function(){
+                $("#passmatch").show();
+            }).blur(function(){
+                $("#passmatch").hide();
+            });
+        });
+    </script>
+{% endblock %}

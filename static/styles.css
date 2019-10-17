@@ -1,0 +1,131 @@
+nav .navbar-brand
+{
+    /* size for brand */
+    font-size: xx-large;
+}
+
+/* colors for brand */
+nav .navbar-brand .blue
+{
+    color: #537fbe;
+}
+nav .navbar-brand .red
+{
+    color: #ea433b;
+}
+nav .navbar-brand .yellow
+{
+    color: #f5b82e;
+}
+nav .navbar-brand .green
+{
+    color: #2e944b;
+}
+
+main .form-control
+{
+    /* center form controls */
+    display: inline-block;
+
+    /* override Bootstrap's 100% width for form controls */
+    width: auto;
+}
+
+main
+{
+    /* scroll horizontally as needed */
+    overflow-x: auto;
+
+    /* center contents */
+    text-align: center;
+}
+
+main img
+{
+    /* constrain images on small screens */
+    max-width: 100%;
+}
+
+table
+{
+    text-align: left;
+}
+
+input, select
+{
+    width: 250px !important;
+    padding: 0;
+    margin: 0;
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+#chpass, #deposit
+{
+    text-align: center;
+    color: #660000;
+    text-decoration: none;
+    font-family: Georgia, verdana, "Lucida Console";
+    font-size: 16px;
+}
+
+#passvalid, #passmatch
+{
+    display: none;
+    width: 300px;
+    padding: 10px;
+    margin: 0 auto;
+    border: 1px solid #d8e5f3;
+    background-color: #ecf2f9;
+    font-family: sans-serif, Georgia, verdana;
+    box-shadow:0 1px 5px #ccc;
+    border-radius: 5px;
+}
+
+#passvalid h5, #passmatch h5
+{
+    background-color: #006666;
+    color: white;
+    padding: 5px 0 10px 0;
+    font-size: 20px;
+}
+
+#passvalid h6
+{
+    text-align: left;
+    margin: 5px 0 15px 6px;
+    font-size: 14px;
+}
+
+#passvalid p, #passmatch p
+{
+    text-align: left;
+    font-size: 14px;
+    margin: 0 0 0 15px;
+}
+
+
+.valid
+{
+    color: green;
+}
+
+.valid:before
+{
+  position: relative;
+  left: -5px;
+  content: "\2714";
+}
+
+.invalid
+{
+    color: red;
+}
+
+.invalid:before
+{
+  position: relative;
+  left: -5px;
+  content: "\2717";
+}
