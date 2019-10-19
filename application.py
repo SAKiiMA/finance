@@ -1,10 +1,8 @@
 import os
-import sqlite3
 import re
+import sqlite3
 
-#from cs50 import SQL
-
-from flask import Flask, flash, jsonify, redirect, render_template, request, session
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, g
 from flask_session import Session
 from tempfile import mkdtemp
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
@@ -17,8 +15,13 @@ from helpers import apology, login_required, lookup, usd
 # Configure application
 app = Flask(__name__)
 
-# Ensure templates are auto-reloaded
-app.config["TEMPLATES_AUTO_RELOAD"] = True
+
+app.config.from_mapping(
+    # Ensure templates are auto-reloaded
+    TEMPLATES_AUTO_RELOAD = True,
+    # setting security key for dvelopment stage
+    SECRET_KEY='development key',
+)
 
 # Ensure responses aren't cached
 @app.after_request
@@ -37,14 +40,28 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-# Configure CS50 Library to use SQLite database
-db = sqlite3.connect('finance.db', check_same_thread=False)
-db.row_factory = sqlite3.Row
-crud = db.cursor()
 
 # Make sure API key is set
 if not os.environ.get("API_KEY"):
     raise RuntimeError("API_KEY not set")
+
+# connect to database when a request is submitted
+@app.before_request
+def connect_db():
+    g.db = sqlite3.connect(
+        "finance.db",
+        detect_types=sqlite3.PARSE_DECLTYPES,
+        check_same_thread=False,
+    )
+    g.db.row_factory = sqlite3.Row
+
+# close database connection when each requested is responded
+@app.teardown_request
+def disconnect_db(e=None):
+    db = g.pop('db', None)
+
+    if db is not None:
+        db.close()
 
 
 @app.route("/")
@@ -54,8 +71,8 @@ def index():
 
     # fetch trade history from database for current user
     uid = (session["user_id"],)
-    crud.execute('SELECT symbol, company, SUM(shares) as shares FROM transactions WHERE user_id=? GROUP BY symbol HAVING SUM(shares) != 0', uid)
-    portfolio = crud.fetchall()
+    portfolio = g.db.execute('SELECT symbol, company, SUM(shares) as shares FROM transactions \
+                            WHERE user_id=? GROUP BY symbol HAVING SUM(shares) != 0', uid).fetchall()
 
     # wrangle data to be sent to user
     input = []
@@ -65,8 +82,7 @@ def index():
         input.append([row["symbol"], row["company"], row["shares"], usd(price), usd(row["shares"] * price)])
         total += row["shares"] * price
 
-    crud.execute('SELECT cash FROM users WHERE id=?', uid)
-    cash = crud.fetchone()["cash"]
+    cash = g.db.execute('SELECT cash FROM users WHERE id=?', uid).fetchone()["cash"]
 
     total = usd(total + cash)
     cash = usd(cash)
@@ -105,8 +121,7 @@ def buy():
         stock = lookup(symbol)
 
         uid = (session["user_id"],)
-        crud.execute('SELECT cash FROM users WHERE id=?', uid )
-        cash = dict(crud.fetchall()[0])["cash"]
+        cash = dict(g.db.execute('SELECT cash FROM users WHERE id=?', uid ).fetchall()[0])["cash"]
 
         # ensure user has enough cash to proceed with purchase
         if cash < shares * stock["price"]:
@@ -114,13 +129,14 @@ def buy():
         else:
             # write the purchase transaction to the database
             transact = (session["user_id"], symbol, stock["name"], shares, stock["price"],)
-            crud.execute('INSERT INTO transactions (user_id, symbol, company, shares, price) VALUES (?, ?, ?, ?, ?)', transact)
-            db.commit()
+            g.db.execute('INSERT INTO transactions (user_id, symbol, company, shares, price) \
+                        VALUES (?, ?, ?, ?, ?)', transact)
+            g.db.commit()
 
             # update user's cash available
             balance = (cash - shares * stock["price"], uid[0])
-            crud.execute('UPDATE users SET cash=? WHERE id=?', balance)
-            db.commit()
+            g.db.execute('UPDATE users SET cash=? WHERE id=?', balance)
+            g.db.commit()
 
             flash("Bought!")
             return redirect("/")
@@ -142,8 +158,7 @@ def check():
         return jsonify(response = False)
 
     # Grab data from database
-    crud.execute('SELECT username FROM users WHERE username=?', uname)
-    uname_db = crud.fetchone()
+    uname_db = g.db.execute('SELECT username FROM users WHERE username=?', uname).fetchone()
 
     # send feedback to user if username is available or already taken
     if not uname_db:
@@ -159,8 +174,7 @@ def history():
 
     # fetch data from database
     uid = (session["user_id"],)
-    crud.execute('SELECT symbol, shares, price, dated FROM transactions WHERE user_id=? ORDER BY dated DESC', uid)
-    rows = crud.fetchall()
+    rows = g.db.execute('SELECT symbol, shares, price, dated FROM transactions WHERE user_id=? ORDER BY dated DESC', uid).fetchall()
 
     # wrangle data for sending to user
     input = []
@@ -190,8 +204,7 @@ def login():
 
         # Query database for username
         username = (request.form.get("username"),)
-        crud.execute('SELECT * FROM users WHERE username=?', username)
-        user = crud.fetchone()
+        user = g.db.execute('SELECT * FROM users WHERE username=?', username).fetchone()
 
         # Ensure username exists and password is correct
         if not user or not check_password_hash(user["hash"], request.form.get("password")):
@@ -270,8 +283,8 @@ def register():
 
         # Ensure user is not registered already
         username = (request.form.get("username"),)
-        crud.execute('SELECT * FROM users WHERE username=?', username)
-        if crud.fetchone():
+        crud = g.db.execute('SELECT * FROM users WHERE username=?', username).fetchone()
+        if crud:
             return apology("Username taken!")
 
         # Ensure correct password pattern (strong!)
@@ -281,18 +294,17 @@ def register():
 
         # register user
         registrant = (request.form.get("username"), generate_password_hash(request.form.get("password")))
-        crud.execute('INSERT INTO users (username, hash) VALUES (?, ?)', registrant)
-        db.commit()
+        g.db.execute('INSERT INTO users (username, hash) VALUES (?, ?)', registrant)
+        g.db.commit()
 
         # keep registered user logged in
-        crud.execute('SELECT id FROM users WHERE username=?', username)
-        session["user_id"] = crud.fetchone()["id"]
+        session["user_id"] = g.db.execute('SELECT id FROM users WHERE username=?', username).fetchone()["id"]
 
         # write default deposit into database (deafault 10,000USD)
-        crud.execute('SELECT cash FROM users WHERE username=?', username)
+        crud  = g.db.execute('SELECT cash FROM users WHERE username=?', username)
         deposit = (session["user_id"], crud.fetchone()["cash"],)
-        crud.execute('INSERT INTO deposit (user_id, amount) VALUES (?, ?)', deposit)
-        db.commit()
+        g.db.execute('INSERT INTO deposit (user_id, amount) VALUES (?, ?)', deposit)
+        g.db.commit()
 
         flash("Successfully Registered!")
         return redirect("/")
@@ -325,8 +337,8 @@ def sell():
 
         # grab submitted shares data from database
         grab = (session["user_id"], request.form.get("symbol"),)
-        crud.execute('SELECT SUM(shares) AS shares FROM transactions WHERE user_id=? AND symbol=? GROUP BY symbol', grab)
-        shares = crud.fetchone()["shares"]
+        shares = g.db.execute('SELECT SUM(shares) AS shares FROM transactions WHERE user_id=? AND \
+                                symbol=? GROUP BY symbol', grab).fetchone()["shares"]
 
         # Ensure number of selling shares are not greater than what user posses
         if int(request.form.get("shares")) > shares:
@@ -335,24 +347,24 @@ def sell():
         # sell the shares and record the transaction in database
         stock = lookup(request.form.get("symbol"))
 
-        transact = (session["user_id"], stock["symbol"], stock["name"], -int(request.form.get("shares")), stock["price"])
-        crud.execute('INSERT INTO transactions (user_id, symbol, company, shares, price) VALUES (?, ?, ?, ?, ?)', transact)
-        db.commit()
+        transact = (session["user_id"], stock["symbol"], stock["name"], -int(request.form.get("shares")), \
+                    stock["price"])
+        g.db.execute('INSERT INTO transactions (user_id, symbol, company, shares, price) \
+                    VALUES (?, ?, ?, ?, ?)', transact)
+        g.db.commit()
 
         # update user cash ballance
         # retrive current cash ballance from database
         uid = (session["user_id"],)
-        crud.execute('SELECT cash FROM users WHERE id=?', uid)
-        cash = crud.fetchone()["cash"]
+        cash = g.db.execute('SELECT cash FROM users WHERE id=?', uid).fetchone()["cash"]
 
         # update cash amount
         cash += int(request.form.get("shares")) * stock["price"]
 
         # write changes to database
         balance = (cash, session["user_id"],)
-        crud.execute('UPDATE users SET cash=? WHERE id=?', balance)
-        db.commit()
-
+        g.db.execute('UPDATE users SET cash=? WHERE id=?', balance)
+        g.db.commit()
 
         # send feedback to user
         flash("Sold!")
@@ -363,8 +375,7 @@ def sell():
 
         # fetch name of all stocks that user posses from database
         uid = (session["user_id"],)
-        crud.execute("SELECT DISTINCT symbol FROM transactions WHERE user_id=?", uid)
-        rows = crud.fetchall()
+        rows = g.db.execute("SELECT DISTINCT symbol FROM transactions WHERE user_id=?", uid).fetchall()
 
         # make list out of symbols
         input=[]
@@ -406,8 +417,7 @@ def change_password():
         uname = (request.form.get("username"),)
 
         #  read data from database
-        crud.execute('SELECT id, username, hash FROM users WHERE username=?', uname)
-        user = crud.fetchone()
+        user = g.db.execute('SELECT id, username, hash FROM users WHERE username=?', uname).fetchone()
 
         # Ensure username & password were registered on database a
         if not user or not check_password_hash(user["hash"], request.form.get("oldpass")):
@@ -415,8 +425,8 @@ def change_password():
 
         # change the password and redirectuser to login page
         db_array = (generate_password_hash(request.form.get("newpass")), user["id"])
-        crud.execute('UPDATE users SET hash=? WHERE id=?', db_array)
-        db.commit()
+        g.db.execute('UPDATE users SET hash=? WHERE id=?', db_array)
+        g.db.commit()
 
         return redirect("/")
 
@@ -442,18 +452,18 @@ def deposit():
 
         # read user current cash from database
         uid = (session["user_id"],)
-        crud.execute('SELECT cash FROM users WHERE id=?', uid)
-        cash = crud.fetchone()["cash"]
+        cash = g.db.execute('SELECT cash FROM users WHERE id=?', uid).fetchone()["cash"]
 
         # deposit amount and update user current cash
         db_array = (cash + float("{:.2f}".format(float(request.form.get("deposit")))), session["user_id"],)
-        crud.execute('UPDATE users SET cash=? WHERE id=?', db_array)
-        db.commit()
+        g.db.execute('UPDATE users SET cash=? WHERE id=?', db_array)
+        g.db.commit()
 
         # write deposit amount into database
         deposit = (session["user_id"], float("{:.2f}".format(float(request.form.get("deposit")))),)
-        crud.execute('INSERT INTO deposit (user_id, amount) VALUES (?, ?)', deposit)
-        db.commit()
+        g.db.execute('INSERT INTO deposit (user_id, amount) VALUES (?, ?)', deposit)
+        g.db.commit()
+
 
         # send feedback to user
         flash("{} Deposited!".format(usd(float("{:.2f}".format(float(request.form.get("deposit")))))))
