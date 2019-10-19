@@ -111,12 +111,16 @@ def buy():
             return apology("Missing shares!")
 
         # Ensure posutive number of share was submitted
-        if int(request.form.get("shares")) <= 0:
+        try:
+            shares = int(request.form.get("shares"))
+            if shares <= 0:
+                return apology("Just Positive Number of Shares!")
+        except ValueError:
             return apology("Just Positive Number of Shares!")
 
         """ Purchase shares """
         symbol = request.form.get("symbol").upper()
-        shares = int(request.form.get("shares"))
+
 
         stock = lookup(symbol)
 
@@ -150,21 +154,18 @@ def buy():
 @app.route("/check", methods=["GET"])
 def check():
     """Return true if username available, else false, in JSON format"""
+
     # grab data submitted via "GET"
     uname = (request.args.get("username"),)
-
-    # Ensure username of at least lenth one submitted
-    if not uname[0]:
-        return jsonify(response = False)
 
     # Grab data from database
     uname_db = g.db.execute('SELECT username FROM users WHERE username=?', uname).fetchone()
 
-    # send feedback to user if username is available or already taken
-    if not uname_db:
-        return jsonify(response = True)
-
-    return jsonify(response = False)
+    # Ensure username of at least lenth one and send feed back if not taken
+    if uname[0] and not uname_db:
+        return jsonify(True)
+    else:
+        return jsonify(False)
 
 
 @app.route("/history")
@@ -242,11 +243,11 @@ def quote():
 
         # Ensure symbol is submitted
         if not request.form.get("symbol"):
-            return apology("Missing Symbol!", 403)
+            return apology("Missing Symbol!")
 
         # Let user know if symbol is not valid
         if not lookup(request.form.get("symbol")):
-            return apology("Invalid Symbol!", 400)
+            return apology("Invalid Symbol!")
 
         else:
             # send the stock price to user interface
@@ -267,19 +268,19 @@ def register():
 
         # Ensure username was submitted
         if not request.form.get("username"):
-            return apology("Username must be provided!", 403)
+            return apology("Username must be provided!")
 
         # Ensure password was submitted
         if not request.form.get("password"):
-            return apology("Password must be provided!", 403)
+            return apology("Password must be provided!",)
 
         # Ensure password was confirmed
         if not request.form.get("confirmation"):
-            return apology("Re-enter password for confirmation", 403)
+            return apology("Re-enter password for confirmation")
 
         # Ensure passwords match
         if request.form.get("password") != request.form.get("confirmation"):
-            return apology("Re-entered password does not match!", 403)
+            return apology("Re-entered password does not match!")
 
         # Ensure user is not registered already
         username = (request.form.get("username"),)

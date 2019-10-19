@@ -52,7 +52,7 @@
                     alert("Passwords do not MATCH!");
                 } else {
                     $.get("/check", {"username": $("#username").val().trim()}, function(data){
-                        if (data.response == true) {
+                        if (data == true) {
                             $("form").off("submit").submit();
                         } else {
                             alert("Username is not available!");
